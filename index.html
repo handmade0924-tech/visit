@@ -24,14 +24,16 @@
 </div>
 
 <script>
-    // 🟢 제공해주신 구글 웹 앱 URL 주소가 정확하게 반영되었습니다.
-    const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec";
+    // 구글 웹 앱 URL 주소(스프레드 시트)
+    const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec
+";
 
     // URL 파라미터에서 장소(zone)와 구분(type: 방문시작 또는 방문종료) 정보 가져오기
     const urlParams = new URLSearchParams(window.location.search);
-    const zone = urlParams.get('zone') || '지정되지 않은 장소';
-    const currentType = urlParams.get('type') || '자동인증';
-
+    const zone = urlParams.get('zone') || '미확인장소';
+    const currentType = urlParams.get('type') || '미확인';
+    const worker = urlParams.get('worker') || '담당자미확인'; // 담당자 이름
+    
     // 페이지가 로드되자마자 버튼 클릭 없이 자동으로 GPS 요청 함수 실행
     window.onload = function() {
         requestLocationAutomation();
