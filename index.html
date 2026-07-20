@@ -28,9 +28,9 @@
 
     // URL 파라미터 추출 (worker, zone, type)
     const urlParams = new URLSearchParams(window.location.search);
-    const worker = urlParams.get('worker') || '기본';
-    const zone = urlParams.get('zone') || '지정되지 않은 장소';
-    const currentType = urlParams.get('type') || '자동인증';
+    const worker = decodeURIComponent(urlParams.get('worker') || '기본');
+    const zone = decodeURIComponent(urlParams.get('zone') || '지정되지 않은 장소');
+    const currentType = decodeURIComponent(urlParams.get('type') || '자동인증');
 
     window.onload = function() {
         requestLocationAutomation();
