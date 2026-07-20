@@ -24,17 +24,13 @@
 </div>
 
 <script>
-    // 구글 웹 앱 URL 주소(스프레드 시트)
-    const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec
-";
+    const GOOGLE_WEB_APP_URL = "본인의_구글_웹_앱_주소";
 
-    // URL 파라미터에서 장소(zone)와 구분(type: 방문시작 또는 방문종료) 정보 가져오기
     const urlParams = new URLSearchParams(window.location.search);
-    const zone = urlParams.get('zone') || '미확인장소';
-    const currentType = urlParams.get('type') || '미확인';
-    const worker = urlParams.get('worker') || '담당자미확인'; // 담당자 이름
-    
-    // 페이지가 로드되자마자 버튼 클릭 없이 자동으로 GPS 요청 함수 실행
+    const zone = urlParams.get('zone') || '지정되지 않은 장소';
+    const currentType = urlParams.get('type') || '자동인증';
+    const worker = urlParams.get('worker') || '기본';
+
     window.onload = function() {
         requestLocationAutomation();
     };
@@ -47,10 +43,11 @@
             return;
         }
 
-        const options = {
-            enableHighAccuracy: true, // 높은 정확도 요구
-            timeout: 10000,           // 10초 제한
-            maximumAge: 0             // 캐시 데이터 사용 금지
+        // 🟢 위치 요청 옵션 (대기 시간을 15초로 늘리고 정확도 조건 완화)
+        const options = { 
+            enableHighAccuracy: false, // 실내에서 GPS 수신을 돕기 위해 false로 변경 추천
+            timeout: 15000,            // 15초 동안 위치를 못 찾으면 에러 출력
+            maximumAge: 0 
         };
 
         navigator.geolocation.getCurrentPosition(success, error, options);
@@ -61,50 +58,43 @@
         const longitude = position.coords.longitude; 
         const localTime = new Date().toLocaleString(); 
 
-        // 화면에 진행 상황 표시
         document.getElementById('result').innerHTML = `
             <p class="success-text">✓ [${currentType}] 위치 확인 완료</p>
             <p style="text-align:center; color:#666; font-size:12px;">구글 스프레드시트에 저장 중입니다...</p>
             <hr style="border: 0; height: 1px; background: #eee; margin: 10px 0;">
+            <b>담당자:</b> ${worker}<br>
             <b>구분:</b> <span style="font-weight:bold; color:${currentType === '방문시작' ? '#1a73e8' : '#d93025'};">${currentType}</span><br>
             <b>인증 장소:</b> ${zone}<br>
-            <b>인증 시간:</b> ${localTime}<br>
-            <b>위도:</b> ${latitude.toFixed(6)}<br>
-            <b>경도:</b> ${longitude.toFixed(6)}
+            <b>인증 시간:</b> ${localTime}
         `;
 
-        // 구글 스프레드시트로 데이터 전송
-        sendDataToGoogleSheets(zone, latitude, longitude, currentType);
+        sendDataToGoogleSheets(zone, latitude, longitude, currentType, worker);
     }
 
+    // 🟢 위치 실패 원인을 화면에 명확히 표시해 주는 로직
     function error(err) {
-        const resultDiv = document.getElementById('result');
-        let errMsg = "위치 정보를 가져오지 못했습니다.";
-        
-        if (err.code === err.PERMISSION_DENIED) {
-            errMsg = "위치 정보 권한이 거부되었습니다. 브라우저 설정에서 위치 권한을 항상 허용해 주세요.";
-        } else if (err.code === err.TIMEOUT) {
-            errMsg = "위치 요청 시간이 초과되었습니다. 인터넷 연결을 확인하고 다시 QR을 찍어주세요.";
+        let errorMsg = "위치 정보를 가져오지 못했습니다.";
+        if (err.code === 1) {
+            errorMsg = "위치 권한이 거부되었습니다.<br>브라우저의 위치 권한을 허용해 주세요.";
+        } else if (err.code === 2) {
+            errorMsg = "위치 신호를 잡을 수 없습니다.<br>(실내이거나 GPS 미작동)";
+        } else if (err.code === 3) {
+            errorMsg = "위치 측정 시간이 초과되었습니다.<br>다시 시도해 주세요.";
         }
-
-        resultDiv.innerHTML = `<span style='color:red;'>${errMsg}</span>`;
+        
+        document.getElementById('result').innerHTML = `<span style='color:red; font-weight:bold;'>${errorMsg}</span>`;
     }
 
-    function sendDataToGoogleSheets(zone, lat, lng, type) {
-        // 오류를 뿜던 주소 확인 안전장치 코드를 삭제하여 에러 발생 원인을 차단했습니다.
+    function sendDataToGoogleSheets(zone, lat, lng, type, worker) {
         fetch(GOOGLE_WEB_APP_URL, {
             method: 'POST',
             mode: 'no-cors', 
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ zone: zone, latitude: lat, longitude: lng, type: type })
+            body: JSON.stringify({ zone: zone, latitude: lat, longitude: lng, type: type, worker: worker })
         })
         .then(() => {
             const successText = document.querySelector('.success-text');
             if(successText) successText.innerHTML = `✓ [${type}] 구글 시트 저장 성공!<br><span style='font-size:14px; color:#666; font-weight:normal;'>창을 닫으셔도 좋습니다.</span>`;
-        })
-        .catch(error => {
-            console.error('전송 실패:', error);
-            alert("데이터 전송 중 오류가 발생했습니다.");
         });
     }
 </script>
