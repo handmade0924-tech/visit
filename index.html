@@ -3,33 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>자동 QR 위치 인증 시스템</title>
+    <title>QR 위치 자동 인증</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding: 50px 20px; background-color: #f4f6f9; }
-        .container { max-width: 400px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h2 { color: #333; margin-bottom: 10px; }
-        p { color: #666; font-size: 14px; margin-bottom: 25px; }
-        #result { margin-top: 25px; text-align: left; padding: 15px; border-radius: 6px; background-color: #f8f9fa; }
-        .success-text { color: #28a745; font-weight: bold; font-size: 18px; text-align: center; margin-top: 0; }
-        .loading { color: #666; font-style: italic; text-align: center; }
+        body { font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #f4f4f9; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; max-width: 320px; width: 100%; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; width: 30px; height: 30px; animation: spin 1s linear infinite; margin: 15px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .success-text { color: #2e7d32; font-weight: bold; font-size: 18px; }
     </style>
 </head>
 <body>
 
-<div class="container">
+<div class="card">
     <h2>QR 위치 자동 인증</h2>
     <div id="result">
-        <p class='loading'>QR을 인식했습니다.<br>GPS 위치 신호를 자동으로 조회 중입니다...</p>
+        <p>GPS 위치 신호를 조회 중입니다...</p>
+        <div class="spinner"></div>
     </div>
 </div>
 
 <script>
-    const GOOGLE_WEB_APP_URL = "본인의_구글_웹_앱_주소";
+    // 🟢 구글 웹 앱 주소 (본인의 웹 앱 URL을 붙여넣으세요)
+    const GOOGLE_WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec";
 
+    // URL 파라미터 추출 (worker, zone, type)
     const urlParams = new URLSearchParams(window.location.search);
+    const worker = urlParams.get('worker') || '기본';
     const zone = urlParams.get('zone') || '지정되지 않은 장소';
     const currentType = urlParams.get('type') || '자동인증';
-    const worker = urlParams.get('worker') || '기본';
 
     window.onload = function() {
         requestLocationAutomation();
@@ -39,18 +40,31 @@
         const resultDiv = document.getElementById('result');
         
         if (!navigator.geolocation) {
-            resultDiv.innerHTML = "<span style='color:red;'>이 브라우저는 위치 정보를 지원하지 않습니다.</span>";
+            resultDiv.innerHTML = "<p style='color:orange;'>위치 미지원 기기입니다. 위치 없이 저장을 진행합니다.</p>";
+            sendDataToGoogleSheets(zone, 0, 0, currentType, worker);
             return;
         }
 
-        // 🟢 위치 요청 옵션 (대기 시간을 15초로 늘리고 정확도 조건 완화)
-        const options = { 
-            enableHighAccuracy: false, // 실내에서 GPS 수신을 돕기 위해 false로 변경 추천
-            timeout: 15000,            // 15초 동안 위치를 못 찾으면 에러 출력
-            maximumAge: 0 
-        };
+        // 🟢 4초 동안 GPS 응답이 없으면 위치 값 0,0으로 강제 자동 저장 처리하는 비상 타이머
+        const fallbackTimer = setTimeout(() => {
+            resultDiv.innerHTML = "<p style='color:orange;'>위치 탐색 시간 초과!<br>위치 정보 없이 저장을 진행합니다...</p>";
+            sendDataToGoogleSheets(zone, 0, 0, currentType, worker);
+        }, 4000);
 
-        navigator.geolocation.getCurrentPosition(success, error, options);
+        const options = { enableHighAccuracy: false, timeout: 3500, maximumAge: Infinity };
+
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                clearTimeout(fallbackTimer);
+                success(position);
+            }, 
+            (err) => {
+                clearTimeout(fallbackTimer);
+                resultDiv.innerHTML = `<p style='color:orange;'>위치 수집 제한되음.<br>구글 시트로 저장을 진행합니다.</p>`;
+                sendDataToGoogleSheets(zone, 0, 0, currentType, worker);
+            }, 
+            options
+        );
     }
 
     function success(position) {
@@ -71,20 +85,6 @@
         sendDataToGoogleSheets(zone, latitude, longitude, currentType, worker);
     }
 
-    // 🟢 위치 실패 원인을 화면에 명확히 표시해 주는 로직
-    function error(err) {
-        let errorMsg = "위치 정보를 가져오지 못했습니다.";
-        if (err.code === 1) {
-            errorMsg = "위치 권한이 거부되었습니다.<br>브라우저의 위치 권한을 허용해 주세요.";
-        } else if (err.code === 2) {
-            errorMsg = "위치 신호를 잡을 수 없습니다.<br>(실내이거나 GPS 미작동)";
-        } else if (err.code === 3) {
-            errorMsg = "위치 측정 시간이 초과되었습니다.<br>다시 시도해 주세요.";
-        }
-        
-        document.getElementById('result').innerHTML = `<span style='color:red; font-weight:bold;'>${errorMsg}</span>`;
-    }
-
     function sendDataToGoogleSheets(zone, lat, lng, type, worker) {
         fetch(GOOGLE_WEB_APP_URL, {
             method: 'POST',
@@ -94,10 +94,12 @@
         })
         .then(() => {
             const successText = document.querySelector('.success-text');
-            if(successText) successText.innerHTML = `✓ [${type}] 구글 시트 저장 성공!<br><span style='font-size:14px; color:#666; font-weight:normal;'>창을 닫으셔도 좋습니다.</span>`;
+            if(successText) {
+                successText.innerHTML = `✓ [${type}] 구글 시트 저장 성공!<br><span style='font-size:14px; color:#666; font-weight:normal;'>창을 닫으셔도 좋습니다.</span>`;
+            }
         });
     }
 </script>
-
 </body>
+    
 </html>
