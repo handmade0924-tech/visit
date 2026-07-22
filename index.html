@@ -63,16 +63,15 @@
       String(now.getMinutes()).padStart(2, '0') + ':' +
       String(now.getSeconds()).padStart(2, '0');
 
-    // 3. 화면 텍스트 즉시 업데이트
     document.getElementById('workerName').innerText = worker;
     document.getElementById('zoneName').innerText = zone;
     document.getElementById('visitType').innerText = type;
     document.getElementById('currentTime').innerText = formattedTime;
 
-    let isSent = false; // 중복 전송 방지 플래그
+    let isSent = false;
 
-    // 4. 데이터 전송 함수 (CORS 회피 및 데이터 전송 보장 로직 적용)
-    function sendData(lat, lng, isGeoError = false) {
+    // 3. 데이터 전송 함수 (구글 앱스 스크립트 전송 안정화)
+    function sendData(lat, lng, reason) {
       if (isSent) return;
       isSent = true;
 
@@ -88,61 +87,59 @@
         timestamp: isoTimestamp
       };
 
-      // mode: 'no-cors' 제거 및 text/plain 헤더로 수정
+      // no-cors 모드로 전송하여 브라우저 CORS 블로킹 방지
       fetch(GAS_URL, {
         method: 'POST',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
         body: JSON.stringify(payload)
       })
-      .then(response => response.json())
-      .then(data => {
+      .then(() => {
         spinner.style.display = 'none';
-        if (data.result === 'success') {
-          if (isGeoError) {
-            statusDiv.innerHTML = "<span style='color:orange; font-size:16px;'>⚠️ 위치 수집 실패 (권한 제한)<br>기록은 정상 완료되었습니다.</span>";
-          } else {
-            statusDiv.innerHTML = "<span style='color:green; font-size:18px;'>✅ 근태 기록이 완료되었습니다!</span>";
-          }
+        if (reason) {
+          statusDiv.innerHTML = "<span style='color:green; font-size:18px;'>✅ 기록 완료</span><br><span style='color:gray; font-size:13px;'>(" + reason + ")</span>";
         } else {
-          statusDiv.innerHTML = "<span style='color:red;'>❌ 앱스 스크립트 오류: " + data.error + "</span>";
+          statusDiv.innerHTML = "<span style='color:green; font-size:18px;'>✅ 근태 기록이 완료되었습니다!</span>";
         }
       })
       .catch(err => {
         spinner.style.display = 'none';
-        // 구글 CORS 리다이렉션 특성상 성공했음에도 catch로 올 수 있어 정상 메시지로 수신
-        statusDiv.innerHTML = "<span style='color:green; font-size:18px;'>✅ 근태 기록이 완료되었습니다!</span>";
+        statusDiv.innerHTML = "<span style='color:red;'>❌ 전송 실패: " + err + "</span>";
       });
     }
 
-    // 5. GPS 수집 및 자동 실행 (안정화 로직)
+    // 4. 위치 요청 및 처리
     function startAutoProcess() {
-      const forceTimer = setTimeout(() => {
-        if (!isSent) {
-          console.warn("GPS 수집 지연으로 기본 좌표로 전송합니다.");
-          sendData(0, 0, true);
-        }
-      }, 3500);
-
-      if (!navigator.geolocation) {
-        clearTimeout(forceTimer);
-        sendData(0, 0, true);
+      // 위치 요청이 지원되지 않거나 보안 문제(http)가 있을 때
+      if (!navigator.geolocation || location.protocol !== 'https:') {
+        sendData(0, 0, "보안연결(HTTPS) 미적용 또는 위치 미지원");
         return;
       }
+
+      // 3초 타임아웃 설정
+      const forceTimer = setTimeout(() => {
+        if (!isSent) {
+          sendData(0, 0, "GPS 응답 시간 초과로 기본 저장");
+        }
+      }, 3000);
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
           clearTimeout(forceTimer);
-          sendData(position.coords.latitude, position.coords.longitude, false);
+          sendData(position.coords.latitude, position.coords.longitude, null);
         },
         (error) => {
           clearTimeout(forceTimer);
-          sendData(0, 0, true);
+          let errMsg = "위치 권한 거부됨";
+          if (error.code === error.POSITION_UNAVAILABLE) errMsg = "위치 정보 이용 불가";
+          if (error.code === error.TIMEOUT) errMsg = "위치 요청 시간 초과";
+          
+          sendData(0, 0, errMsg);
         },
-        { enableHighAccuracy: false, timeout: 3000, maximumAge: 0 }
+        { enableHighAccuracy: false, timeout: 2500, maximumAge: 0 }
       );
     }
 
-    // 즉시 실행
     startAutoProcess();
   </script>
 </body>
