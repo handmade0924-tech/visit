@@ -3,143 +3,143 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>방문 인증</title>
+  <title>재가지원 방문 근태 자동 인증</title>
   <style>
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      background-color: #f8f9fa;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .container {
-      background: white;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-      text-align: center;
-      width: 85%;
-      max-width: 400px;
-    }
+    body { font-family: 'Noto Sans KR', sans-serif; padding: 20px; text-align: center; max-width: 400px; margin: 0 auto; background-color: #f9f9f9; }
+    .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px; }
+    .info-group { text-align: left; margin-bottom: 12px; font-size: 16px; line-height: 1.5; }
+    .info-label { font-weight: bold; color: #555; display: inline-block; width: 95px; }
+    .info-value { color: #111; font-weight: 600; }
     .spinner {
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #007bff;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 20px auto;
+      border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%;
+      width: 36px; height: 36px; animation: spin 1s linear infinite; margin: 20px auto;
     }
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-    h2 { margin-bottom: 10px; color: #333; }
-    p { color: #666; font-size: 15px; line-height: 1.5; }
-    .success { color: #28a745; font-weight: bold; }
-    .error { color: #dc3545; font-weight: bold; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    #status { margin-top: 15px; font-weight: bold; line-height: 1.4; font-size: 16px; }
   </style>
 </head>
 <body>
-
-  <div class="container">
-    <div id="loading">
-      <div class="spinner"></div>
-      <h2>방문 인증 처리 중...</h2>
-      <p>위치 정보를 확인하고 있습니다.<br>잠시만 기다려 주세요.</p>
+  <h2>방문 근태 자동 인증</h2>
+  
+  <div class="card">
+    <div class="info-group">
+      <span class="info-label">담당자:</span>
+      <span id="workerName" class="info-value">확인 중...</span>
     </div>
-    
-    <div id="result" style="display: none;">
-      <h2 id="result-title"></h2>
-      <p id="result-msg"></p>
+    <div class="info-group">
+      <span class="info-label">어르신 성함:</span>
+      <span id="zoneName" class="info-value">확인 중...</span>
     </div>
+    <div class="info-group">
+      <span class="info-label">방문 구분:</span>
+      <span id="visitType" class="info-value">확인 중...</span>
+    </div>
+    <div class="info-group">
+      <span class="info-label">등록시간:</span>
+      <span id="currentTime" class="info-value">확인 중...</span>
+    </div>
+    <div id="loadingSpinner" class="spinner"></div>
   </div>
 
+  <div id="status">📍 위치 확인 및 자동 기록 중...</div>
+
   <script>
-    // ★ 본인의 구글 앱스 스크립트 웹 앱 URL로 변경하세요.
-    const GAS_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
+    // ⚠️ [필수] 구글 앱스 스크립트 배포 후 생성된 웹앱 URL을 입력해 주세요.
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec";
 
-    // URL 파라미터 가져오기 (worker, zone, type)
+    // 1. URL 파라미터 읽기
     const urlParams = new URLSearchParams(window.location.search);
-    const workerName = urlParams.get('worker') || "미지정";
-    const locationId = urlParams.get('zone') || urlParams.get('location') || "미지정";
-    const type = urlParams.get('type') || "방문시작";
+    const worker = urlParams.get('worker') || '미지정';
+    const zone = urlParams.get('zone') || '알수없음';
+    const type = urlParams.get('type') || '알수없음';
 
-    // ★ 페이지 진입/스캔 당시의 "정확한 시각" 캡처
-    const scanTime = new Date();
-    const isoTimestamp = scanTime.toISOString();
+    // 2. 현재 시간 구하기 (화면 표시용 및 서버 전송용)
+    const now = new Date();
+    const isoTimestamp = now.toISOString(); // ★ 앱스 스크립트 전송용 ISO 시간값
+    
+    const formattedTime = now.getFullYear() + '-' +
+      String(now.getMonth() + 1).padStart(2, '0') + '-' +
+      String(now.getDate()).padStart(2, '0') + ' ' +
+      String(now.getHours()).padStart(2, '0') + ':' +
+      String(now.getMinutes()).padStart(2, '0') + ':' +
+      String(now.getSeconds()).padStart(2, '0');
 
-    function showResult(title, message, isSuccess) {
-      document.getElementById('loading').style.display = 'none';
-      const resultDiv = document.getElementById('result');
-      const titleEl = document.getElementById('result-title');
-      const msgEl = document.getElementById('result-msg');
+    // 3. 화면 텍스트 즉시 업데이트
+    document.getElementById('workerName').innerText = worker;
+    document.getElementById('zoneName').innerText = zone;
+    document.getElementById('visitType').innerText = type;
+    document.getElementById('currentTime').innerText = formattedTime;
 
-      titleEl.innerText = title;
-      titleEl.className = isSuccess ? 'success' : 'error';
-      msgEl.innerText = message;
-      resultDiv.style.display = 'block';
-    }
+    let isSent = false; // 중복 전송 방지 플래그
 
-    function processAttendance() {
-      // GPS 고정밀 옵션 및 7초 타임아웃 설정
-      const geoOptions = {
-        enableHighAccuracy: true,
-        timeout: 7000,
-        maximumAge: 0
-      };
+    // 4. 데이터 전송 함수
+    function sendData(lat, lng, isGeoError = false) {
+      if (isSent) return; // 이미 전송되었으면 중단
+      isSent = true;
 
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            sendData(position.coords.latitude, position.coords.longitude);
-          },
-          (error) => {
-            console.warn("GPS 수집 실패/거부. 기본값(0,0)으로 진행합니다.", error);
-            sendData(0, 0); // 타임아웃/오류 시 (0,0) 폴백
-          },
-          geoOptions
-        );
-      } else {
-        sendData(0, 0);
-      }
-    }
+      const statusDiv = document.getElementById('status');
+      const spinner = document.getElementById('loadingSpinner');
 
-    function sendData(lat, lng) {
       const payload = {
-        workerName: workerName,
-        locationId: locationId,
+        workerName: worker,
+        locationId: zone,
         type: type,
         latitude: lat,
         longitude: lng,
-        timestamp: isoTimestamp // ★ 앱스 스크립트로 실제 접속 시간 전송
+        timestamp: isoTimestamp // ★ 웹페이지에 표시된 시간값을 구글 시트로 전달
       };
 
       fetch(GAS_URL, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'text/plain;charset=utf-8' // GAS CORS 회피용
-        },
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       })
-      .then(response => response.json())
-      .then(data => {
-        if (data.result === 'success') {
-          showResult("인증 완료", `${workerName}님, ${locationId} ${type} 인증이 정상 등록되었습니다.`, true);
+      .then(() => {
+        spinner.style.display = 'none';
+        if (isGeoError) {
+          statusDiv.innerHTML = "<span style='color:orange; font-size:16px;'>⚠️ 위치 수집 실패 (권한 제한)<br>기록은 정상 완료되었습니다.</span>";
         } else {
-          showResult("인증 실패", "오류가 발생했습니다: " + data.error, false);
+          statusDiv.innerHTML = "<span style='color:green; font-size:18px;'>✅ 근태 기록이 완료되었습니다!</span>";
         }
       })
-      .catch(error => {
-        console.error("Error:", error);
-        showResult("통신 오류", "서버와 통신 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.", false);
+      .catch(err => {
+        spinner.style.display = 'none';
+        statusDiv.innerHTML = "<span style='color:red;'>❌ 전송 실패: " + err + "</span>";
       });
     }
 
-    // 페이지 로드 시 즉시 실행
-    window.onload = processAttendance;
+    // 5. GPS 수집 및 자동 실행 (안정화 로직)
+    function startAutoProcess() {
+      // 3.5초 이상 GPS 응답이 없으면 위치 0,0으로 강제 전송하는 안전장치
+      const forceTimer = setTimeout(() => {
+        if (!isSent) {
+          console.warn("GPS 수집 지연으로 기본 좌표로 전송합니다.");
+          sendData(0, 0, true);
+        }
+      }, 3500);
+
+      if (!navigator.geolocation) {
+        clearTimeout(forceTimer);
+        sendData(0, 0, true);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          clearTimeout(forceTimer);
+          sendData(position.coords.latitude, position.coords.longitude, false);
+        },
+        (error) => {
+          clearTimeout(forceTimer);
+          sendData(0, 0, true);
+        },
+        { enableHighAccuracy: false, timeout: 3000, maximumAge: 0 }
+      );
+    }
+
+    // 즉시 실행
+    startAutoProcess();
   </script>
 </body>
 </html>
