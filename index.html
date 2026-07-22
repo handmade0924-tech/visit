@@ -3,88 +3,88 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>방문 인증 시스템</title>
+  <title>방문 인증</title>
   <style>
     body {
-      font-family: 'Noto Sans KR', sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: #f8f9fa;
       display: flex;
-      flex-direction: column;
-      align-items: center;
       justify-content: center;
-      min-height: 100vh;
+      align-items: center;
+      height: 100vh;
       margin: 0;
-      background-color: #f5f5f5;
     }
-    .card {
+    .container {
       background: white;
       padding: 30px;
       border-radius: 12px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-      width: 90%;
-      max-width: 400px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.1);
       text-align: center;
+      width: 85%;
+      max-width: 400px;
     }
-    h2 { margin-top: 0; color: #333; }
-    .info { margin: 15px 0; font-size: 16px; color: #555; }
-    .status {
-      margin-top: 20px;
-      padding: 12px;
-      border-radius: 6px;
-      font-weight: bold;
-      display: none;
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #007bff;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 20px auto;
     }
-    .loading { background-color: #e3f2fd; color: #1976d2; }
-    .success { background-color: #e8f5e9; color: #2e7d32; }
-    .error { background-color: #ffebee; color: #c62828; }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    h2 { margin-bottom: 10px; color: #333; }
+    p { color: #666; font-size: 15px; line-height: 1.5; }
+    .success { color: #28a745; font-weight: bold; }
+    .error { color: #dc3545; font-weight: bold; }
   </style>
 </head>
 <body>
 
-  <div class="card">
-    <h2 id="title">방문 인증 처리 중...</h2>
-    <div class="info">
-      <p><strong>담당자:</strong> <span id="worker">확인 중...</span></p>
-      <p><strong>인증장소:</strong> <span id="location">확인 중...</span></p>
-      <p><strong>구분:</strong> <span id="type">확인 중...</span></p>
-      <p><strong>시각:</strong> <span id="time-display">확인 중...</span></p>
+  <div class="container">
+    <div id="loading">
+      <div class="spinner"></div>
+      <h2>방문 인증 처리 중...</h2>
+      <p>위치 정보를 확인하고 있습니다.<br>잠시만 기다려 주세요.</p>
     </div>
-    <div id="status" class="status"></div>
+    
+    <div id="result" style="display: none;">
+      <h2 id="result-title"></h2>
+      <p id="result-msg"></p>
+    </div>
   </div>
 
   <script>
     // ★ 본인의 구글 앱스 스크립트 웹 앱 URL로 변경하세요.
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec";
+    const GAS_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec";
 
-    // URL 파라미터 읽기 (예: ?worker=권은화&zone=홍길동어르신&type=방문시작)
+    // URL 파라미터 가져오기 (worker, zone, type)
     const urlParams = new URLSearchParams(window.location.search);
     const workerName = urlParams.get('worker') || "미지정";
     const locationId = urlParams.get('zone') || urlParams.get('location') || "미지정";
     const type = urlParams.get('type') || "방문시작";
 
-    // 스캔/접속 당시의 "진짜 시각" 캡처
+    // ★ 페이지 진입/스캔 당시의 "정확한 시각" 캡처
     const scanTime = new Date();
-    const isoTimestamp = scanTime.toISOString(); // 앱스 스크립트 전송용 ISO 문자열
-    const formattedTime = scanTime.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }); // 화면 표시용
+    const isoTimestamp = scanTime.toISOString();
 
-    // UI에 정보 표시
-    document.getElementById('worker').innerText = workerName;
-    document.getElementById('location').innerText = locationId;
-    document.getElementById('type').innerText = type;
-    document.getElementById('time-display').innerText = formattedTime;
+    function showResult(title, message, isSuccess) {
+      document.getElementById('loading').style.display = 'none';
+      const resultDiv = document.getElementById('result');
+      const titleEl = document.getElementById('result-title');
+      const msgEl = document.getElementById('result-msg');
 
-    const statusEl = document.getElementById('status');
-
-    function showStatus(message, typeClass) {
-      statusEl.className = `status ${typeClass}`;
-      statusEl.innerText = message;
-      statusEl.style.display = 'block';
+      titleEl.innerText = title;
+      titleEl.className = isSuccess ? 'success' : 'error';
+      msgEl.innerText = message;
+      resultDiv.style.display = 'block';
     }
 
-    // GPS 위치 수집 및 데이터 전송 실행
     function processAttendance() {
-      showStatus("위치 정보 확인 및 등록 중...", "loading");
-
-      // GPS 고정밀 옵션 및 7초 타임아웃
+      // GPS 고정밀 옵션 및 7초 타임아웃 설정
       const geoOptions = {
         enableHighAccuracy: true,
         timeout: 7000,
@@ -94,23 +94,19 @@
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
           (position) => {
-            // 위치 수집 성공 시
             sendData(position.coords.latitude, position.coords.longitude);
           },
           (error) => {
             console.warn("GPS 수집 실패/거부. 기본값(0,0)으로 진행합니다.", error);
-            // 위치 실패 시 폴백(0,0) 처리
-            sendData(0, 0);
+            sendData(0, 0); // 타임아웃/오류 시 (0,0) 폴백
           },
           geoOptions
         );
       } else {
-        // GPS 미지원 브라우저
         sendData(0, 0);
       }
     }
 
-    // 구글 앱스 스크립트로 데이터 POST 전송
     function sendData(lat, lng) {
       const payload = {
         workerName: workerName,
@@ -118,7 +114,7 @@
         type: type,
         latitude: lat,
         longitude: lng,
-        timestamp: isoTimestamp // ★ 버튼/QR 스캔 당시 찍힌 정확한 시간 전달
+        timestamp: isoTimestamp // ★ 앱스 스크립트로 실제 접속 시간 전송
       };
 
       fetch(GAS_URL, {
@@ -131,19 +127,18 @@
       .then(response => response.json())
       .then(data => {
         if (data.result === 'success') {
-          showStatus("✅ 정상 등록되었습니다. 창을 닫으셔도 됩니다.", "success");
-          document.getElementById('title').innerText = "인증 완료";
+          showResult("인증 완료", `${workerName}님, ${locationId} ${type} 인증이 정상 등록되었습니다.`, true);
         } else {
-          showStatus("❌ 등록 중 오류가 발생했습니다: " + data.error, "error");
+          showResult("인증 실패", "오류가 발생했습니다: " + data.error, false);
         }
       })
       .catch(error => {
         console.error("Error:", error);
-        showStatus("❌ 통신 오류가 발생했습니다. 네트워크 상태를 확인해주세요.", "error");
+        showResult("통신 오류", "서버와 통신 중 오류가 발생했습니다. 네트워크 상태를 확인해주세요.", false);
       });
     }
 
-    // 페이지 로드 시 즉시 자동 실행
+    // 페이지 로드 시 즉시 실행
     window.onload = processAttendance;
   </script>
 </body>
