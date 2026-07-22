@@ -92,7 +92,7 @@
 
     // ⚠️ [필수] 구글 앱스 스크립트 배포 후 생성된 웹앱 URL을 입력해 주세요.
 
-    const GAS_URL = "여기에_구글_앱스_스크립트_URL을_붙여넣으세요";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec";
 
 
 
@@ -111,6 +111,7 @@
     // 2. 현재 시간 구하기
 
     const now = new Date();
+    const isoTimestamp = now.toISOString(); // ★ 앱스 스크립트 전송용 ISO 시간값
 
     const formattedTime = now.getFullYear() + '-' +
 
@@ -168,7 +169,9 @@
 
         latitude: lat,
 
-        longitude: lng
+        longitude: lng,
+
+        timestamp: isoTimestamp // ★ 웹페이지에 표시된 시간값을 구글 시트로 전달
 
       };
 
