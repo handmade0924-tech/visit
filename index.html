@@ -8,7 +8,7 @@
     body { font-family: 'Noto Sans KR', sans-serif; padding: 20px; text-align: center; max-width: 400px; margin: 0 auto; background-color: #f9f9f9; }
     .card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); margin-top: 20px; }
     .info-group { text-align: left; margin-bottom: 12px; font-size: 16px; line-height: 1.5; }
-    .info-label { font-weight: bold; color: #555; display: inline-block; width: 90px; }
+    .info-label { font-weight: bold; color: #555; display: inline-block; width: 95px; }
     .info-value { color: #111; font-weight: 600; }
     .spinner {
       border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%;
@@ -34,6 +34,10 @@
       <span class="info-label">방문 구분:</span>
       <span id="visitType" class="info-value">확인 중...</span>
     </div>
+    <div class="info-group">
+      <span class="info-label">등록시간:</span>
+      <span id="currentTime" class="info-value">확인 중...</span>
+    </div>
     <div id="loadingSpinner" class="spinner"></div>
   </div>
 
@@ -41,7 +45,8 @@
 
   <script>
     // ⚠️ [필수] 구글 앱스 스크립트 배포 후 생성된 웹앱 URL을 입력해 주세요.
-    const GAS_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec";
+    const GAS_URL = "https://script.google.com/macros/s/AKfycbzj6FzxBjYU3KuSK4M86j7SqdyrQYMNEoqEw_tAD6FJot9uR3S0SF5vWmtTKVGuwhE9Kg/exec
+";
 
     // URL 파라미터 파싱 (?worker=권은화&zone=홍길동&type=방문시작)
     const urlParams = new URLSearchParams(window.location.search);
@@ -49,12 +54,25 @@
     const zone = urlParams.get('zone') || '알수없음';
     const type = urlParams.get('type') || '알수없음';
 
-    // 화면 표시
+    // 현재 시간 포맷팅 함수 (YYYY-MM-DD HH:MM:SS)
+    function getCurrentDateTime() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      const seconds = String(now.getSeconds()).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+
+    // 화면 표기
     document.getElementById('workerName').innerText = worker;
     document.getElementById('zoneName').innerText = zone;
     document.getElementById('visitType').innerText = type;
+    document.getElementById('currentTime').innerText = getCurrentDateTime();
 
-    // DOM 읽기가 완료되면 자동으로 실행
+    // DOM 읽기가 완료되면 자동으로 GPS 수집 및 전송 실행
     document.addEventListener("DOMContentLoaded", function() {
       autoSubmitAttendance();
     });
